@@ -4,10 +4,21 @@ namespace MauiAppMinhasCompras.Views;
 
 public partial class EditarProduto : ContentPage
 {
-	public EditarProduto()
-	{
-		InitializeComponent();
-	}
+    public EditarProduto()
+    {
+        InitializeComponent();
+    }
+
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+
+        var produto = BindingContext as Produto;
+        if (produto != null && produto.Categoria != null)
+        {
+            picker_categoria.SelectedItem = produto.Categoria;
+        }
+    }
 
     private async void ToolbarItem_Clicked(object sender, EventArgs e)
     {
@@ -20,7 +31,8 @@ public partial class EditarProduto : ContentPage
                 Id = produto_anexado.Id,
                 Descricao = txt_descricao.Text,
                 Quantidade = Convert.ToDouble(txt_quantidade.Text),
-                Preco = Convert.ToDouble(txt_preco.Text)
+                Preco = Convert.ToDouble(txt_preco.Text),
+                Categoria = picker_categoria.SelectedItem as string
             };
 
             await App.Db.Update(p);

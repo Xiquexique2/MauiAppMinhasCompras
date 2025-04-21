@@ -1,16 +1,17 @@
 using MauiAppMinhasCompras.Models;
 using System.Collections.ObjectModel;
+using System.Linq;
 
 namespace MauiAppMinhasCompras.Views;
 
 public partial class ListaProduto : ContentPage
 {
     ObservableCollection<Produto> lista = new ObservableCollection<Produto>();
+    List<Produto> todosProdutos = new List<Produto>(); 
 
     public ListaProduto()
     {
         InitializeComponent();
-
         lst_produtos.ItemsSource = lista;
     }
 
@@ -19,10 +20,23 @@ public partial class ListaProduto : ContentPage
         try
         {
             lista.Clear();
+            todosProdutos.Clear();
 
             List<Produto> tmp = await App.Db.GetAll();
+            todosProdutos.AddRange(tmp); 
 
             tmp.ForEach(i => lista.Add(i));
+
+            
+            var categorias = todosProdutos
+                .Select(p => p.Categoria)
+                .Where(c => !string.IsNullOrEmpty(c))
+                .Distinct()
+                .ToList();
+
+            categorias.Insert(0, "Todas");
+            categoriaPicker.ItemsSource = categorias;
+            categoriaPicker.SelectedIndex = 0;
         }
         catch (Exception ex)
         {
@@ -35,7 +49,6 @@ public partial class ListaProduto : ContentPage
         try
         {
             Navigation.PushAsync(new Views.NovoProduto());
-
         }
         catch (Exception ex)
         {
@@ -53,9 +66,11 @@ public partial class ListaProduto : ContentPage
 
             lista.Clear();
 
-            List<Produto> tmp = await App.Db.Search(q);
+            var filtrados = todosProdutos
+                .Where(p => p.Descricao.ToLower().Contains(q.ToLower()))
+                .ToList();
 
-            tmp.ForEach(i => lista.Add(i));
+            filtrados.ForEach(i => lista.Add(i));
         }
         catch (Exception ex)
         {
@@ -87,7 +102,7 @@ public partial class ListaProduto : ContentPage
             bool confirm = await DisplayAlert(
                 "Tem Certeza?", $"Remover {p.Descricao}?", "Sim", "Não");
 
-            if(confirm)
+            if (confirm)
             {
                 await App.Db.Delete(p.Id);
                 lista.Remove(p);
@@ -121,18 +136,72 @@ public partial class ListaProduto : ContentPage
         try
         {
             lista.Clear();
+            todosProdutos.Clear();
 
             List<Produto> tmp = await App.Db.GetAll();
+            todosProdutos.AddRange(tmp);
 
             tmp.ForEach(i => lista.Add(i));
         }
         catch (Exception ex)
         {
             await DisplayAlert("Ops", ex.Message, "OK");
-
-        } finally
+        }
+        finally
         {
             lst_produtos.IsRefreshing = false;
         }
     }
+
+    private void categoriaPicker_SelectedIndexChanged(object sender, EventArgs e)
+    {
+        string categoriaSelecionada = categoriaPicker.SelectedItem as string;
+
+        
+        var filtrados = todosProdutos
+            .Where(p => categoriaSelecionada == "Todas" || p.Categoria == categoriaSelecionada)
+            .ToList();
+
+       
+        string pesquisa = txt_search.Text?.ToLower() ?? string.Empty;
+        filtrados = filtrados
+            .Where(p => p.Descricao.ToLower().Contains(pesquisa))
+            .ToList();
+
+        lista.Clear();
+        filtrados.ForEach(i => lista.Add(i));
+    }
+    private async void ToolbarItem_Clicked_Relatorio(object sender, EventArgs e)
+    {
+        try
+        {
+            if (!todosProdutos.Any())
+            {
+                await DisplayAlert("Relatório", "Nenhum produto disponível.", "OK");
+                return;
+            }
+
+            var relatorio = todosProdutos
+                .Where(p => !string.IsNullOrEmpty(p.Categoria))
+                .GroupBy(p => p.Categoria)
+                .Select(g => new
+                {
+                    Categoria = g.Key,
+                    Total = g.Sum(p => p.Total)
+                })
+                .OrderByDescending(r => r.Total)
+                .ToList();
+
+            string msg = string.Join(Environment.NewLine,
+                relatorio.Select(r => $"{r.Categoria}: {r.Total:C}"));
+
+            await DisplayAlert("Relatório de Gastos por Categoria", msg, "OK");
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert("Erro", ex.Message, "OK");
+        }
+    }
+
+
 }
